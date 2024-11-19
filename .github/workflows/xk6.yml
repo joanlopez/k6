@@ -15,8 +15,8 @@ jobs:
   test-xk6:
     strategy:
       matrix:
-        go: [stable, tip]
-        platform: [ubuntu-latest, windows-2019, macos-latest]
+        go: [ stable, tip ]
+        platform: [ ubuntu-latest, windows-2019, macos-latest ]
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout code
@@ -27,6 +27,13 @@ jobs:
         with:
           go-version: 1.23.x
           check-latest: true
+      - name: Remove the default Go installation
+        if: matrix.go == 'tip' && (matrix.platform == 'windows-latest' || matrix.platform == 'windows-2019')
+        shell: pwsh
+        run: |
+          $go_path = (Get-Command go).Source
+          Write-Host "Removing Go executable from: $go_path"
+          Remove-Item -Force $go_path
       - name: Download Go tip
         if: matrix.go == 'tip'
         env:
