@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"go.k6.io/k6/storage"
 	"io"
 	"os"
 	"os/signal"
@@ -70,6 +71,7 @@ type GlobalState struct {
 	FallbackLogger logrus.FieldLogger
 
 	SecretsManager *secretsource.Manager
+	StorageManager *storage.Manager
 	Usage          *usage.Usage
 	TestStatus     *lib.TestStatus
 }
@@ -172,6 +174,7 @@ type GlobalFlags struct {
 	ProfilingEnabled bool
 	LogOutput        string
 	SecretSource     []string
+	Storage          []string
 	LogFormat        string
 	Verbose          bool
 

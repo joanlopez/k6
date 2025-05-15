@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.k6.io/k6/ext"
+	"go.k6.io/k6/storage"
 	"io"
 	"net/http"
 	"os"
@@ -101,6 +103,19 @@ func (c *cmdRun) run(cmd *cobra.Command, args []string) (err error) {
 		waitExitDone()
 		c.gs.Events.UnsubscribeAll()
 	}()
+
+	// TODO: Could it be moved to PersistentPreRunE, for isolation and better error handling??
+	storages, err := initializeStorages(c.gs)
+	if err != nil {
+		// TODO: Abort?
+		logger.WithError(err).Error("failed to initialize storages")
+	}
+
+	c.gs.StorageManager, err = storage.NewManager(storages)
+	if err != nil {
+		// TODO: Abort?
+		logger.WithError(err).Error("failed to initialize storage manager")
+	}
 
 	test, controller, err := c.loadConfiguredTest(cmd, args)
 	if err != nil {
@@ -597,4 +612,40 @@ func handleSummaryResult(fs fsext.Fs, stdOut, stdErr io.Writer, result map[strin
 	}
 
 	return consolidateErrorMessage(errs, "Could not save some summary information:")
+}
+
+func initializeStorages(gs *state.GlobalState) (map[string]storage.Storage, error) {
+	baseParams := storage.Params{
+		Logger: gs.Logger,
+		//Environment: gs.Env,
+		//FS:          gs.FS,
+		//Usage:       gs.Usage,
+	}
+
+	result := make(map[string]storage.Storage)
+	for _, line := range gs.Flags.Storage {
+		t, _, ok := strings.Cut(line, "=")
+		if !ok {
+			return nil, fmt.Errorf("couldn't parse storage configuration %q", line)
+		}
+		storages := ext.Get(ext.StorageExtension)
+		found, ok := storages[t]
+		if !ok {
+			return nil, fmt.Errorf("no storage for type %q for configuration %q", t, line)
+		}
+		c := found.Module.(storage.Constructor) //nolint:forcetypeassert
+		params := baseParams
+
+		s, err := c(params)
+		if err != nil {
+			return nil, err
+		}
+		_, alreadyRegistered := result[t] // TODO: Review "name" vs "type"
+		if alreadyRegistered {
+			return nil, fmt.Errorf("storage for name %q already registered before configuration %q", t, line)
+		}
+		result[t] = s
+	}
+
+	return result, nil
 }
